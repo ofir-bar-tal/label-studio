@@ -63,6 +63,7 @@ const Model = types.model({
     "paragraphs",
     "paragraphlabels",
     "video",
+    "videocompare",
     "videorectangle",
   ]),
 });

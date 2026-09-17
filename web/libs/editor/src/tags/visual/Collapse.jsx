@@ -84,6 +84,7 @@ const PanelModel = types
       "paragraphlabels",
       "pdf",
       "video",
+      "videocompare",
       "videorectangle",
       "timelinelabels",
       "custominterface",
