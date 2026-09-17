@@ -33,6 +33,10 @@ export const HstackVideoCanvas = forwardRef(
     const naturalSizeRef = useRef(null); // { halfWidth, height } - one half's native pixel size
     const currentFrameRef = useRef(1);
     const lengthRef = useRef(1);
+    // Mirrors the `dividerPosition` prop, but can also be updated directly via the imperative
+    // handle's `setDividerPosition` - lets a drag redraw every frame without going through
+    // React/MST, so drag latency isn't tied to render cost.
+    const dividerPositionRef = useRef(dividerPosition);
 
     const [loading, setLoading] = useState(true);
 
@@ -58,7 +62,7 @@ export const HstackVideoCanvas = forwardRef(
 
         ctx.drawImage(video, 0, 0, halfWidth, srcHeight, offsetX, offsetY, drawW, drawH);
 
-        const dividerX = offsetX + drawW * dividerPosition;
+        const dividerX = offsetX + drawW * dividerPositionRef.current;
 
         ctx.save();
         ctx.beginPath();
@@ -77,7 +81,12 @@ export const HstackVideoCanvas = forwardRef(
 
         ctx.drawImage(video, 0, 0, fullWidth, srcHeight, offsetX, offsetY, drawW, drawH);
       }
-    }, [mode, dividerPosition, width, height]);
+    }, [mode, width, height]);
+
+    useEffect(() => {
+      dividerPositionRef.current = dividerPosition;
+      draw();
+    }, [dividerPosition, draw]);
 
     const updateFrame = useCallback(
       (force = false) => {
@@ -220,8 +229,15 @@ export const HstackVideoCanvas = forwardRef(
 
           video.currentTime = (clamped - 1) / framerate;
         },
+        // Redraws immediately at the given divider position without going through React/MST -
+        // used while actively dragging the wipe divider, so drag latency is independent of
+        // render cost. The `dividerPosition` prop still drives the ref on every normal render.
+        setDividerPosition(position) {
+          dividerPositionRef.current = position;
+          draw();
+        },
       }),
-      [framerate],
+      [framerate, draw],
     );
 
     useEffect(() => {

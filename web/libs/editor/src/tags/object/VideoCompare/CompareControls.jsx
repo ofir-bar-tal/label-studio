@@ -32,7 +32,7 @@ const ToolbarButton = ({ tooltip, onClick, children }) => (
 );
 
 export const CompareControls = observer(({ item, isFullScreen, onToggleFullscreen }) => {
-  const framerate = Number(item.framerate) || 24;
+  const framerate = Number(item.framerate);
   const isFrameUnit = item.timeUnit === "frames";
 
   const positionLabel = isFrameUnit ? String(item.frame) : formatSeconds((item.frame - 1) / framerate);

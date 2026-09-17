@@ -13,11 +13,11 @@ import "./VideoCompare.prefix.css";
 
 /**
  * The divider drags itself: during a drag it writes the new position straight onto the divider's
- * DOM node (no MST/React round trip per pixel, so there's zero re-render latency behind the
- * cursor) and only commits the final position to the model on release. A rAF gate coalesces
- * mousemove bursts to at most one style write per frame.
+ * DOM node and directly into the canvas's imperative handle (no MST/React round trip per pixel,
+ * so there's zero re-render latency behind the cursor) and only commits the final position to
+ * the model on release. A rAF gate coalesces mousemove bursts to at most one write per frame.
  */
-const DividerHandle = ({ position, onDrag, onCommit, containerRef, dividerRef }) => {
+const DividerHandle = ({ position, onCommit, containerRef, dividerRef, canvasRef }) => {
   const handleMouseDown = useCallback(
     (e) => {
       e.preventDefault();
@@ -28,7 +28,7 @@ const DividerHandle = ({ position, onDrag, onCommit, containerRef, dividerRef })
       const applyPct = (pct) => {
         latestPct = pct;
         if (dividerRef.current) dividerRef.current.style.left = `${pct * 100}%`;
-        onDrag(pct);
+        canvasRef.current?.setDividerPosition(pct);
       };
 
       const onMouseMove = (moveEvent) => {
@@ -53,7 +53,7 @@ const DividerHandle = ({ position, onDrag, onCommit, containerRef, dividerRef })
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     },
-    [position, onDrag, onCommit, containerRef, dividerRef],
+    [position, onCommit, containerRef, dividerRef, canvasRef],
   );
 
   return (
@@ -77,9 +77,6 @@ const HtxVideoCompareView = ({ item }) => {
   const [loaded, setLoaded] = useState(false);
   const [errors, setErrors] = useState([]);
   const [stageSize, setStageSize] = useState(null);
-  // Local, high-frequency mirror of item.dividerPosition while dragging - avoids feeding a new
-  // value into the canvas's own render on every single mousemove tick via MST/observer.
-  const [dividerPosition, setDividerPosition] = useState(item.dividerPosition);
 
   const [isFullScreen, enterFullscreen, exitFullscreen, toggleFullscreen] = useToggle(false);
   const fullscreen = useFullscreen({
@@ -128,11 +125,12 @@ const HtxVideoCompareView = ({ item }) => {
 
   useEffect(() => {
     if (item.ref.current) item.ref.current.volume = item.volume;
-  }, [item.volume, item, loaded]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.volume, loaded]);
 
   const handleFrameChange = useCallback(
-    (frame, length) => {
-      item.onFrameChange(frame, length);
+    (frame) => {
+      item.onFrameChange(frame);
     },
     [item],
   );
@@ -174,7 +172,7 @@ const HtxVideoCompareView = ({ item }) => {
                 width={stageWidth}
                 height={stageHeight}
                 mode={item.mode}
-                dividerPosition={dividerPosition}
+                dividerPosition={item.dividerPosition}
                 muted={item.muted}
                 speed={item.speed}
                 framerate={Number(item.framerate)}
@@ -185,11 +183,11 @@ const HtxVideoCompareView = ({ item }) => {
               />
               {isWipe && (
                 <DividerHandle
-                  position={dividerPosition}
-                  onDrag={setDividerPosition}
+                  position={item.dividerPosition}
                   onCommit={handleDividerCommit}
                   containerRef={containerRef}
                   dividerRef={dividerRef}
+                  canvasRef={item.ref}
                 />
               )}
             </>

@@ -4,6 +4,7 @@ import React from "react";
 import { AnnotationMixin } from "../../../mixins/AnnotationMixin";
 import IsReadyMixin from "../../../mixins/IsReadyMixin";
 import { parseValue } from "../../../utils/data";
+import { normalizePlaybackSpeed } from "../../../utils/videoPlaybackSpeed";
 import ObjectBase from "../Base";
 
 /**
@@ -80,25 +81,14 @@ const Model = types
       else if (framerate < 1) self.framerate = String(1 / framerate);
       else self.framerate = String(framerate);
 
-      // normalize playback speed parameters (must match backend/SDK limits)
-      const MIN_PLAYBACK_SPEED = 0.05;
-      const MIN_DEFAULT_PLAYBACK_SPEED = 0.25;
-      const DEFAULT_PLAYBACK_SPEED = 1;
-      const MAX_PLAYBACK_SPEED = 10;
-      const data = self.store.task?.dataObj;
-      const defaultPlaybackSpeed = Number(parseValue(String(self.defaultplaybackspeed), data));
-      const minPlaybackSpeed = Number(parseValue(String(self.minplaybackspeed), data));
+      const { minplaybackspeed, defaultplaybackspeed } = normalizePlaybackSpeed({
+        defaultplaybackspeed: self.defaultplaybackspeed,
+        minplaybackspeed: self.minplaybackspeed,
+        data: self.store.task?.dataObj,
+      });
 
-      self.minplaybackspeed =
-        !minPlaybackSpeed || isNaN(minPlaybackSpeed) || minPlaybackSpeed < MIN_PLAYBACK_SPEED
-          ? MIN_DEFAULT_PLAYBACK_SPEED
-          : Math.min(minPlaybackSpeed, MAX_PLAYBACK_SPEED);
-
-      self.defaultplaybackspeed =
-        !defaultPlaybackSpeed || isNaN(defaultPlaybackSpeed) || defaultPlaybackSpeed < MIN_PLAYBACK_SPEED
-          ? DEFAULT_PLAYBACK_SPEED
-          : Math.min(Math.max(defaultPlaybackSpeed, self.minplaybackspeed), MAX_PLAYBACK_SPEED);
-
+      self.minplaybackspeed = minplaybackspeed;
+      self.defaultplaybackspeed = defaultplaybackspeed;
       self.speed = self.defaultplaybackspeed;
     },
   }))
@@ -127,9 +117,8 @@ const Model = types
       self.setFrame(self.frame + delta);
     },
 
-    onFrameChange(frame, length) {
+    onFrameChange(frame) {
       self.frame = frame;
-      self.setLength(length);
     },
 
     play() {

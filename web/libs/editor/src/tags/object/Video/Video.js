@@ -12,6 +12,7 @@ import { ff } from "@humansignal/core";
 import ObjectBase from "../Base";
 import { isDefined } from "../../../utils/utilities";
 import { computeDriftCorrection } from "../../../utils/videoDrift";
+import { normalizePlaybackSpeed } from "../../../utils/videoPlaybackSpeed";
 
 const isSyncedBuffering = ff.isActive(ff.FF_SYNCED_BUFFERING);
 
@@ -190,28 +191,14 @@ const Model = types
       else if (framerate < 1) self.framerate = String(1 / framerate);
       else self.framerate = String(framerate);
 
-      // normalize playback speed parameters (must match backend/SDK limits)
-      const MIN_PLAYBACK_SPEED = 0.05;
-      const MIN_DEFAULT_PLAYBACK_SPEED = 0.25;
-      const DEFAULT_PLAYBACK_SPEED = 1;
-      const MAX_PLAYBACK_SPEED = 10;
-      const data = self.store.task?.dataObj;
-      const defaultPlaybackSpeed = Number(parseValue(String(self.defaultplaybackspeed), data));
-      const minPlaybackSpeed = Number(parseValue(String(self.minplaybackspeed), data));
+      const { minplaybackspeed, defaultplaybackspeed } = normalizePlaybackSpeed({
+        defaultplaybackspeed: self.defaultplaybackspeed,
+        minplaybackspeed: self.minplaybackspeed,
+        data: self.store.task?.dataObj,
+      });
 
-      // validate and set minPlaybackSpeed
-      self.minplaybackspeed =
-        !minPlaybackSpeed || isNaN(minPlaybackSpeed) || minPlaybackSpeed < MIN_PLAYBACK_SPEED
-          ? MIN_DEFAULT_PLAYBACK_SPEED
-          : Math.min(minPlaybackSpeed, MAX_PLAYBACK_SPEED);
-
-      // validate and set defaultPlaybackSpeed
-      self.defaultplaybackspeed =
-        !defaultPlaybackSpeed || isNaN(defaultPlaybackSpeed) || defaultPlaybackSpeed < MIN_PLAYBACK_SPEED
-          ? DEFAULT_PLAYBACK_SPEED
-          : Math.min(Math.max(defaultPlaybackSpeed, self.minplaybackspeed), MAX_PLAYBACK_SPEED);
-
-      // set initial speed to defaultPlaybackSpeed
+      self.minplaybackspeed = minplaybackspeed;
+      self.defaultplaybackspeed = defaultplaybackspeed;
       self.speed = self.defaultplaybackspeed;
     },
   }))
