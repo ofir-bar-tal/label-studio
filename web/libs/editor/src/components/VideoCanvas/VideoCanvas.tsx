@@ -67,8 +67,13 @@ type VideoDimentions = {
 
 export const clampZoom = (value: number) => clamp(value, MIN_ZOOM, MAX_ZOOM);
 
-const zoomRatio = (canvasWidth: number, canvasHeight: number, width: number, height: number) =>
-  Math.min(1, Math.min(canvasWidth / width, canvasHeight / height));
+// A zero width/height (e.g. momentarily at mount, before layout/metadata settle) would divide by
+// zero and produce NaN; since NaN !== NaN always, that would make effects comparing against a
+// previous ratio never converge and fire forever. Falling back to 1 keeps the result finite.
+const zoomRatio = (canvasWidth: number, canvasHeight: number, width: number, height: number) => {
+  if (!width || !height) return 1;
+  return Math.min(1, Math.min(canvasWidth / width, canvasHeight / height));
+};
 
 // Browsers can only handle time to the nearest 2ms, so we need to round to that precision when seeking by frames
 // https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/currentTime
@@ -84,6 +89,8 @@ export interface VideoRef {
   pan: PanOptions;
   volume: number;
   currentTime: number;
+  /** Direct passthrough to the underlying <video>.playbackRate, independent of the `speed` prop effect. */
+  playbackRate: number;
   videoDimensions: {
     width: number;
     height: number;
@@ -101,6 +108,14 @@ export interface VideoRef {
   setZoom: (value: number) => void;
   setPan: (x: number, y: number) => void;
   adjustPan: (x: number, y: number) => PanOptions;
+  /**
+   * Schedules `callback` for the moment the next video frame is actually presented, using the
+   * browser's `requestVideoFrameCallback` when available (fires once per real decoded frame,
+   * not on a fixed timer) and falling back to `requestAnimationFrame` where it isn't supported.
+   * Returns a handle to pass to `cancelFramePresented`.
+   */
+  requestFramePresented: (callback: (now: number) => void) => number;
+  cancelFramePresented: (handle: number) => void;
 }
 
 const useBufferingWrapper = (props: VideoProps): [boolean, (isBuffering: boolean) => void] => {
@@ -449,6 +464,16 @@ export const VideoCanvas = memo(
       get duration() {
         return videoRef.current?.duration ?? 0;
       },
+      get playbackRate() {
+        return videoRef.current?.playbackRate ?? 1;
+      },
+      set playbackRate(rate: number) {
+        const video = videoRef.current;
+
+        if (video) {
+          video.playbackRate = rate;
+        }
+      },
       get volume() {
         return videoRef.current?.volume ?? 1;
       },
@@ -456,7 +481,7 @@ export const VideoCanvas = memo(
         const video = videoRef.current;
 
         if (video) {
-          video.currentTime = value;
+          video.volume = value;
         }
       },
       adjustPan(x, y) {
@@ -517,6 +542,31 @@ export const VideoCanvas = memo(
 
         // Round to next closest browser precision frame time
         this.currentTime = this.frameSteppedTime(exactTime, true);
+      },
+      requestFramePresented(callback: (now: number) => void) {
+        const video = videoRef.current as
+          | (HTMLVideoElement & {
+              requestVideoFrameCallback?: (cb: (now: number, metadata: unknown) => void) => number;
+            })
+          | undefined;
+
+        if (video?.requestVideoFrameCallback) {
+          return video.requestVideoFrameCallback((now) => callback(now));
+        }
+        return requestAnimationFrame(callback);
+      },
+      cancelFramePresented(handle: number) {
+        const video = videoRef.current as
+          | (HTMLVideoElement & {
+              cancelVideoFrameCallback?: (handle: number) => void;
+            })
+          | undefined;
+
+        if (video?.cancelVideoFrameCallback) {
+          video.cancelVideoFrameCallback(handle);
+        } else {
+          cancelAnimationFrame(handle);
+        }
       },
     };
 

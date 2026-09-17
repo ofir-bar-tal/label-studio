@@ -158,6 +158,8 @@ function createMockItem(overrides = {}) {
     setFrame: jest.fn(),
     triggerSyncPlay: jest.fn(),
     triggerSyncPause: jest.fn(),
+    checkDriftCorrection: jest.fn(),
+    stopDriftNudge: jest.fn(),
     handleSpeed: jest.fn(),
     setLoopTimelineRegion: jest.fn(),
     handleSeek: jest.fn(),
@@ -526,5 +528,56 @@ describe("HtxVideoView", () => {
     expect(mockTimelineProps.regions).toBeDefined();
     const hasNew = (mockTimelineProps.regions || []).some((r) => r.id === "new" && r.label === "New");
     expect(hasNew).toBe(true);
+  });
+
+  it("allows the Timeline fullscreen button so each Video tag can go fullscreen independently", async () => {
+    const item = createMockItem();
+    const store = createMockStore();
+    render(<HtxVideoView item={item} store={store} />);
+    await flushRaf();
+    await triggerVideoLoad();
+    expect(mockTimelineProps.allowFullscreen).toBe(true);
+  });
+
+  it("periodically runs drift correction while a synced video is playing", async () => {
+    const item = createMockItem({ sync: "video_b", checkDriftCorrection: mock() });
+    const store = createMockStore();
+    render(<HtxVideoView item={item} store={store} />);
+    await flushRaf();
+    await triggerVideoLoad();
+
+    await act(() => {
+      mockTimelineProps.onPlay?.();
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+
+    expect(item.checkDriftCorrection).toHaveBeenCalled();
+  });
+
+  it("stops running drift correction once the video is paused", async () => {
+    const item = createMockItem({ sync: "video_b", checkDriftCorrection: mock() });
+    const store = createMockStore();
+    render(<HtxVideoView item={item} store={store} />);
+    await flushRaf();
+    await triggerVideoLoad();
+
+    await act(() => {
+      mockTimelineProps.onPlay?.();
+    });
+    item.ref.current.playing = true;
+    await act(() => {
+      mockTimelineProps.onPause?.();
+    });
+
+    item.checkDriftCorrection.mockClear();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+
+    expect(item.checkDriftCorrection).not.toHaveBeenCalled();
   });
 });

@@ -11,6 +11,7 @@ import { FF_VIDEO_FRAME_SEEK_PRECISION, isFF } from "../../../utils/feature-flag
 import { ff } from "@humansignal/core";
 import ObjectBase from "../Base";
 import { isDefined } from "../../../utils/utilities";
+import { computeDriftCorrection } from "../../../utils/videoDrift";
 
 const isSyncedBuffering = ff.isActive(ff.FF_SYNCED_BUFFERING);
 
@@ -110,6 +111,7 @@ const Model = types
     length: 1,
     drawingRegion: null,
     loopTimelineRegion: false,
+    isDriftNudging: false,
   }))
   .views((self) => ({
     get store() {
@@ -229,6 +231,7 @@ const Model = types
         {
           playing: self.ref.current.playing,
           time: self.ref.current.frameSteppedTime(),
+          frame: self.ref.current.currentFrame,
           ...data,
         },
         event,
@@ -307,8 +310,81 @@ const Model = types
         self.speed = data.speed;
       }
 
-      if (isDefined(data.time) && (!isSyncedBuffering || video.currentTime !== data.time)) {
+      if (isDefined(data.frame)) {
+        // Frame index is fps-agnostic across paired videos, so convert it back to time using
+        // this video's own fps rather than trusting the origin video's raw currentTime float.
+        if (video.currentFrame !== data.frame) {
+          video.goToFrame(data.frame);
+        }
+      } else if (isDefined(data.time) && (!isSyncedBuffering || video.currentTime !== data.time)) {
         video.currentTime = data.time;
+      }
+    },
+
+    /**
+     * Restores normal playback speed after a drift-nudge is no longer needed (back in sync,
+     * playback stopped, or sync was torn down).
+     */
+    stopDriftNudge() {
+      if (!self.isDriftNudging) return;
+      if (self.ref.current) self.ref.current.playbackRate = self.speed;
+      self.isDriftNudging = false;
+    },
+
+    /**
+     * Periodically called while this video is playing in a sync group to correct drift that
+     * accumulates between separately-decoding <video> elements even when both were seeked to
+     * the same frame. Nudges this video's own time only — never the peer's — to avoid both
+     * sides correcting against each other at once.
+     *
+     * Small drift is corrected by briefly nudging playbackRate up/down (imperceptible, no
+     * stutter); only drift large enough that a rate nudge would take too long falls back to a
+     * hard currentTime seek, which is visibly jarring on a playing <video> so it's a last resort.
+     */
+    checkDriftCorrection() {
+      if (!self.sync || !self.syncManager) {
+        self.stopDriftNudge();
+        return;
+      }
+      if (!self.ref.current?.playing) {
+        self.stopDriftNudge();
+        return;
+      }
+
+      const framerate = Number(self.framerate);
+      if (!framerate) return;
+
+      const selfFrame = self.ref.current.currentFrame;
+
+      for (const target of self.syncManager.syncTargets.values()) {
+        if (target.name === self.name) continue;
+        if (target.type !== "video") continue;
+        if (!target.ref?.current?.playing) continue;
+
+        const peerFrame = target.ref.current.currentFrame;
+
+        if (!isDefined(peerFrame)) continue;
+
+        const correction = computeDriftCorrection({
+          selfFrame,
+          peerFrame,
+          framerate,
+          currentTime: self.ref.current.currentTime,
+          duration: self.ref.current.duration,
+          speed: self.speed,
+        });
+
+        if (correction.action === "none") {
+          self.stopDriftNudge();
+        } else if (correction.action === "seek") {
+          self.ref.current.currentTime = correction.currentTime;
+          self.stopDriftNudge();
+        } else {
+          self.ref.current.playbackRate = correction.playbackRate;
+          self.isDriftNudging = true;
+        }
+        // only compare against one peer; groups of more than 2 videos aren't a supported case here
+        break;
       }
     },
 

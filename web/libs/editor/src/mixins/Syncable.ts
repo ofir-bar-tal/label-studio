@@ -25,6 +25,8 @@ export interface SyncTarget {
 
 export interface SyncDataFull {
   time: number;
+  /** 1-based frame index; when present, receivers should prefer this over `time` for frame-accurate seeking. */
+  frame: number;
   playing: boolean;
   speed: number;
   buffering: boolean;

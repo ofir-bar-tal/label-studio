@@ -28,6 +28,9 @@ import { ff } from "@humansignal/core";
 
 const isSyncedBuffering = ff.isActive(ff.FF_SYNCED_BUFFERING);
 
+/** How often to check for drift between synced videos during playback. */
+const DRIFT_CHECK_INTERVAL_MS = 250;
+
 function useZoom(videoDimensions, canvasDimentions, shouldClampPan) {
   const [zoomState, setZoomState] = useState({ zoom: 1, pan: { x: 0, y: 0 } });
   const data = useRef({});
@@ -264,6 +267,20 @@ const HtxVideoView = ({ item, store }) => {
       observer.disconnect();
     };
   }, []);
+
+  // Periodically correct drift between synced videos while this one is playing.
+  useEffect(() => {
+    if (!playing || !item.sync) return;
+
+    const intervalId = setInterval(() => {
+      item.checkDriftCorrection();
+    }, DRIFT_CHECK_INTERVAL_MS);
+
+    return () => {
+      clearInterval(intervalId);
+      item.stopDriftNudge();
+    };
+  }, [playing, item]);
 
   useEffect(() => {
     const fullscreenElement = fullscreen.getElement();
@@ -631,7 +648,7 @@ const HtxVideoView = ({ item, store }) => {
             regions={regions}
             height={item.timelineheight}
             altHopSize={store.settings.videoHopSize}
-            allowFullscreen={false}
+            allowFullscreen={true}
             fullscreen={isFullScreen}
             defaultStepSize={16}
             disableView={!supportsTimelineRegions && !supportsRegions}
