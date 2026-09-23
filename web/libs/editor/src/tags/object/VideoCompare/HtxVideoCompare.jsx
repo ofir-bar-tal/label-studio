@@ -16,8 +16,16 @@ import "./VideoCompare.prefix.css";
  * DOM node and directly into the canvas's imperative handle (no MST/React round trip per pixel,
  * so there's zero re-render latency behind the cursor) and only commits the final position to
  * the model on release. A rAF gate coalesces mousemove bursts to at most one write per frame.
+ *
+ * `contentRect` is the actual on-screen video area (contain-fit, so it can be narrower than the
+ * pane with blank margins on the sides) - the same rectangle HstackVideoCanvas's own wipe-clip
+ * math uses. Positioning/dragging against the full pane width instead would only line up with the
+ * canvas's clip boundary at the exact center, drifting apart toward the edges whenever the pane's
+ * aspect ratio doesn't match the video's.
  */
-const DividerHandle = ({ position, onCommit, containerRef, dividerRef, canvasRef }) => {
+const DividerHandle = ({ position, onCommit, containerRef, dividerRef, canvasRef, contentRect }) => {
+  const { offsetX, contentWidth } = contentRect;
+
   const handleMouseDown = useCallback(
     (e) => {
       e.preventDefault();
@@ -27,15 +35,15 @@ const DividerHandle = ({ position, onCommit, containerRef, dividerRef, canvasRef
 
       const applyPct = (pct) => {
         latestPct = pct;
-        if (dividerRef.current) dividerRef.current.style.left = `${pct * 100}%`;
+        if (dividerRef.current) dividerRef.current.style.left = `${offsetX + contentWidth * pct}px`;
         canvasRef.current?.setDividerPosition(pct);
       };
 
       const onMouseMove = (moveEvent) => {
         const rect = containerRef.current?.getBoundingClientRect();
 
-        if (!rect || rect.width === 0) return;
-        const pct = clamp((moveEvent.clientX - rect.left) / rect.width, 0, 1);
+        if (!rect || contentWidth === 0) return;
+        const pct = clamp((moveEvent.clientX - rect.left - offsetX) / contentWidth, 0, 1);
 
         if (rafId !== null) return;
         rafId = requestAnimationFrame(() => {
@@ -53,14 +61,14 @@ const DividerHandle = ({ position, onCommit, containerRef, dividerRef, canvasRef
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     },
-    [position, onCommit, containerRef, dividerRef, canvasRef],
+    [position, onCommit, containerRef, dividerRef, canvasRef, offsetX, contentWidth],
   );
 
   return (
     <div
       ref={dividerRef}
       className={cn("video-compare").elem("divider").toClassName()}
-      style={{ left: `${position * 100}%` }}
+      style={{ left: `${offsetX + contentWidth * position}px` }}
       onMouseDown={handleMouseDown}
     >
       <div className={cn("video-compare").elem("divider-handle").toClassName()} />
@@ -77,6 +85,7 @@ const HtxVideoCompareView = ({ item }) => {
   const [loaded, setLoaded] = useState(false);
   const [errors, setErrors] = useState([]);
   const [stageSize, setStageSize] = useState(null);
+  const [naturalSize, setNaturalSize] = useState(null);
 
   const [isFullScreen, enterFullscreen, exitFullscreen, toggleFullscreen] = useToggle(false);
   const fullscreen = useFullscreen({
@@ -116,8 +125,9 @@ const HtxVideoCompareView = ({ item }) => {
   }, []);
 
   const handleLoad = useCallback(
-    ({ length }) => {
+    ({ length, videoDimensions }) => {
       setLoaded(true);
+      setNaturalSize(videoDimensions);
       item.setLength(length);
     },
     [item],
@@ -151,6 +161,18 @@ const HtxVideoCompareView = ({ item }) => {
   const isWipe = item.mode === "wipe";
   const stageWidth = stageSize ? stageSize[0] : 0;
   const stageHeight = stageSize ? stageSize[1] : 0;
+
+  // Same contain-fit math as HstackVideoCanvas's wipe-mode draw() (single-half aspect ratio),
+  // computed here in CSS pixels so the DOM divider lines up with the canvas's own clip boundary
+  // instead of assuming the video fills the pane edge-to-edge.
+  let contentRect = { offsetX: 0, contentWidth: stageWidth };
+
+  if (naturalSize && naturalSize.width > 0 && naturalSize.height > 0 && stageWidth > 0 && stageHeight > 0) {
+    const scale = Math.min(stageWidth / naturalSize.width, stageHeight / naturalSize.height);
+    const contentWidth = naturalSize.width * scale;
+
+    contentRect = { offsetX: (stageWidth - contentWidth) / 2, contentWidth };
+  }
 
   return (
     <ObjectTag item={item}>
@@ -188,6 +210,7 @@ const HtxVideoCompareView = ({ item }) => {
                   containerRef={containerRef}
                   dividerRef={dividerRef}
                   canvasRef={item.ref}
+                  contentRect={contentRect}
                 />
               )}
             </>
