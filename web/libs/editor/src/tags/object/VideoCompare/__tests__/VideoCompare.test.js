@@ -1,4 +1,3 @@
-import { test, expect, describe } from "bun:test";
 import { VideoCompareModel } from "../VideoCompare.js";
 
 /** Minimal fake of HstackVideoCanvas's ref API. */

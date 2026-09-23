@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, act } from "@testing-library/react";
 
-mockModule("@humansignal/icons", () => ({
+jest.mock("@humansignal/icons", () => ({
   IconFullscreen: () => <span data-testid="icon-fullscreen" />,
   IconFullscreenExit: () => <span data-testid="icon-fullscreen-exit" />,
   IconPlay: () => <span data-testid="icon-play" />,
@@ -9,8 +9,8 @@ mockModule("@humansignal/icons", () => ({
   IconVolumeMute: () => <span data-testid="icon-volume-mute" />,
 }));
 
-mockModule("@humansignal/ui", () => ({
-  ...requireActual("@humansignal/ui"),
+jest.mock("@humansignal/ui", () => ({
+  ...jest.requireActual("@humansignal/ui"),
   Button: ({ children, onClick, ...props }) => (
     <button type="button" onClick={onClick} {...props}>
       {children}
@@ -19,33 +19,33 @@ mockModule("@humansignal/ui", () => ({
   Tooltip: ({ children }) => children,
 }));
 
-mockModule("../../../../components/ErrorMessage/ErrorMessage", () => ({
+jest.mock("../../../../components/ErrorMessage/ErrorMessage", () => ({
   ErrorMessage: ({ error }) => <div data-testid="error-message">{String(error)}</div>,
 }));
 
-mockModule("../../../../components/Tags/Object", () => ({
+jest.mock("../../../../components/Tags/Object", () => ({
   __esModule: true,
   default: ({ children }) => <div data-testid="object-tag">{children}</div>,
 }));
 
 const mockHstackCalls = [];
-mockModule("../HstackVideoCanvas", () => ({
+jest.mock("../HstackVideoCanvas", () => ({
   HstackVideoCanvas: (props) => {
     mockHstackCalls.push(props);
-    if (props.ref) props.ref.current = { play: mock(), pause: mock(), goToFrame: mock() };
+    if (props.ref) props.ref.current = { play: jest.fn(), pause: jest.fn(), goToFrame: jest.fn() };
     return <div data-testid="hstack-video-canvas">HstackVideoCanvas</div>;
   },
 }));
 
-mockModule("../../../../hooks/useFullscreen", () => ({
+jest.mock("../../../../hooks/useFullscreen", () => ({
   useFullscreen: () => ({
-    enter: mock(),
-    exit: mock(),
+    enter: jest.fn(),
+    exit: jest.fn(),
     getElement: () => null,
   }),
 }));
 
-mockModule("../../../../hooks/useToggle", () => {
+jest.mock("../../../../hooks/useToggle", () => {
   const { useState } = require("react");
   return {
     useToggle: (initial) => {
@@ -57,19 +57,19 @@ mockModule("../../../../hooks/useToggle", () => {
 
 // jsdom doesn't implement layout, so ResizeObserver never reports real dimensions;
 // stub the project's resize-observer wrapper to report a fixed, non-zero size.
-mockModule("../../../../utils/resize-observer", () => ({
+jest.mock("../../../../utils/resize-observer", () => ({
   __esModule: true,
-  default: mock().mockImplementation(function (callback) {
+  default: jest.fn().mockImplementation(function (callback) {
     this._callback = callback;
-    this.observe = mock((el) => {
+    this.observe = jest.fn((el) => {
       if (this._callback && el) {
         Object.defineProperty(el, "clientWidth", { value: 800, configurable: true });
         Object.defineProperty(el, "clientHeight", { value: 600, configurable: true });
         this._callback();
       }
     });
-    this.unobserve = mock();
-    this.disconnect = mock();
+    this.unobserve = jest.fn();
+    this.disconnect = jest.fn();
     return this;
   }),
 }));
@@ -95,7 +95,7 @@ function createItem(overrides = {}) {
 
 describe("HtxVideoCompareView", () => {
   beforeEach(() => {
-    clearAllMocks();
+    jest.clearAllMocks();
     mockHstackCalls.length = 0;
   });
 
