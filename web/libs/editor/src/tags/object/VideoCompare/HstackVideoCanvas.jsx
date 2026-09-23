@@ -42,23 +42,38 @@ export const HstackVideoCanvas = forwardRef(
 
     const draw = useCallback(() => {
       const video = videoRef.current;
+      const canvas = canvasRef.current;
       const ctx = contextRef.current;
       const natural = naturalSizeRef.current;
 
-      if (!video || !ctx || !natural || width === 0 || height === 0) return;
+      if (!video || !canvas || !ctx || !natural || width === 0 || height === 0) return;
+
+      // Size the canvas's backing store to the pane's real physical pixels (CSS size x device
+      // pixel ratio), not just its CSS size - otherwise a large pane on a Retina/4K display gets
+      // silently downsampled to its CSS pixel count regardless of how much detail the source
+      // video actually has. Reassigning canvas.width/height clears the bitmap, so only do it
+      // when the target size actually changed.
+      const dpr = window.devicePixelRatio || 1;
+      const backingWidth = Math.round(width * dpr);
+      const backingHeight = Math.round(height * dpr);
+
+      if (canvas.width !== backingWidth || canvas.height !== backingHeight) {
+        canvas.width = backingWidth;
+        canvas.height = backingHeight;
+      }
 
       const { halfWidth, height: srcHeight } = natural;
 
-      ctx.clearRect(0, 0, width, height);
+      ctx.clearRect(0, 0, backingWidth, backingHeight);
 
       if (mode === "wipe") {
         // Contain-fit a single half's aspect ratio into the pane, then composite both halves
         // stretched over that same region, clipping video B to the right of the divider.
-        const scale = Math.min(width / halfWidth, height / srcHeight);
+        const scale = Math.min(backingWidth / halfWidth, backingHeight / srcHeight);
         const drawW = halfWidth * scale;
         const drawH = srcHeight * scale;
-        const offsetX = (width - drawW) / 2;
-        const offsetY = (height - drawH) / 2;
+        const offsetX = (backingWidth - drawW) / 2;
+        const offsetY = (backingHeight - drawH) / 2;
 
         ctx.drawImage(video, 0, 0, halfWidth, srcHeight, offsetX, offsetY, drawW, drawH);
 
@@ -73,11 +88,11 @@ export const HstackVideoCanvas = forwardRef(
       } else {
         // Side-by-side: the combined frame already shows both videos next to each other.
         const fullWidth = halfWidth * 2;
-        const scale = Math.min(width / fullWidth, height / srcHeight);
+        const scale = Math.min(backingWidth / fullWidth, backingHeight / srcHeight);
         const drawW = fullWidth * scale;
         const drawH = srcHeight * scale;
-        const offsetX = (width - drawW) / 2;
-        const offsetY = (height - drawH) / 2;
+        const offsetX = (backingWidth - drawW) / 2;
+        const offsetY = (backingHeight - drawH) / 2;
 
         ctx.drawImage(video, 0, 0, fullWidth, srcHeight, offsetX, offsetY, drawW, drawH);
       }
@@ -248,7 +263,12 @@ export const HstackVideoCanvas = forwardRef(
 
     return (
       <div style={{ position: "relative", width, height }}>
-        <canvas ref={canvasRef} width={width} height={height} style={{ display: "block" }} />
+        {/*
+          No width/height attrs here: draw() sets canvas.width/height imperatively to the pane's
+          physical pixel size (CSS size x devicePixelRatio), so leaving React in control of these
+          attributes would reset the backing store to the CSS size (and clear it) on every render.
+        */}
+        <canvas ref={canvasRef} style={{ width, height, display: "block" }} />
         {loading && (
           <div
             style={{
