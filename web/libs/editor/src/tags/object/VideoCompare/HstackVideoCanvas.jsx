@@ -263,10 +263,17 @@ export const HstackVideoCanvas = forwardRef(
             Loading…
           </div>
         )}
+        {/*
+          No crossOrigin attr: we only ever drawImage() this video onto the canvas for display,
+          never read pixels back out (no getImageData/toDataURL/toBlob), so a "tainted" canvas
+          from a cross-origin, non-CORS video is harmless here. Adding crossOrigin="anonymous"
+          would force the browser to require CORS headers from wherever `src` is hosted (e.g. a
+          plain S3 bucket with no CORS policy), breaking playback for no benefit. Revisit if a
+          future feature needs to read canvas pixels (e.g. frame export/thumbnail capture).
+        */}
         <video
           ref={videoRef}
           src={src}
-          crossOrigin="anonymous"
           preload="auto"
           muted={muted}
           playsInline
