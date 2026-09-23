@@ -156,11 +156,18 @@ export const HstackVideoCanvas = forwardRef(
         updateFrameRef.current(true);
       };
       const onSeeked = () => updateFrameRef.current(true);
+      // "loadedmetadata" (which triggers the first draw, in handleLoadedMetadata) only guarantees
+      // duration/dimensions are known - the browser may not have decoded an actual frame yet, so
+      // that first draw can paint nothing and leave the canvas black. "loadeddata" guarantees a
+      // real decoded frame is available, so redraw again once it fires to show frame one before
+      // playback starts.
+      const onLoadedData = () => updateFrameRef.current(true);
 
       video.addEventListener("play", onPlay);
       video.addEventListener("pause", onPause);
       video.addEventListener("ended", onPause);
       video.addEventListener("seeked", onSeeked);
+      video.addEventListener("loadeddata", onLoadedData);
 
       return () => {
         running = false;
@@ -168,6 +175,7 @@ export const HstackVideoCanvas = forwardRef(
         video.removeEventListener("pause", onPause);
         video.removeEventListener("ended", onPause);
         video.removeEventListener("seeked", onSeeked);
+        video.removeEventListener("loadeddata", onLoadedData);
         if (video.requestVideoFrameCallback) video.cancelVideoFrameCallback(handle);
         else cancelAnimationFrame(handle);
       };
