@@ -154,6 +154,44 @@ describe("HtxVideoCompareView", () => {
     expect(item.mode).toBe("side-by-side");
   });
 
+  it("space/arrow keys drive playback and frame-stepping only once the panel has focus", async () => {
+    const item = createItem();
+
+    render(<HtxVideoCompareView item={item} />);
+    await triggerLoad();
+
+    const panel = screen.getByTestId("object-tag").firstChild;
+
+    // Not focused yet: keys on the document shouldn't reach the panel's handler at all.
+    fireEvent.keyDown(document.body, { code: "Space" });
+    expect(item.playing).toBe(false);
+
+    panel.focus();
+
+    fireEvent.keyDown(panel, { code: "Space" });
+    expect(item.playing).toBe(true);
+
+    fireEvent.keyDown(panel, { code: "ArrowRight" });
+    expect(item.frame).toBe(2);
+
+    fireEvent.keyDown(panel, { code: "ArrowLeft" });
+    expect(item.frame).toBe(1);
+  });
+
+  it("clicking the video canvas focuses the panel so hotkeys become active", async () => {
+    const item = createItem();
+
+    render(<HtxVideoCompareView item={item} />);
+    await triggerLoad();
+
+    const panel = screen.getByTestId("object-tag").firstChild;
+    const canvas = screen.getByTestId("hstack-video-canvas");
+
+    expect(panel).not.toHaveFocus();
+    fireEvent.mouseDown(canvas);
+    expect(panel).toHaveFocus();
+  });
+
   it("fullscreen button toggles the fullscreen modifier class", async () => {
     const item = createItem();
 

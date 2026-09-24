@@ -158,6 +158,31 @@ const HtxVideoCompareView = ({ item }) => {
     [item],
   );
 
+  // Space/arrow-key transport controls are scoped to this panel, not global: they only fire once
+  // the panel (or something inside it - a button, the canvas, the divider) has focus. Focusing the
+  // panel explicitly on mousedown (rather than relying on the browser's implicit "click focuses the
+  // nearest focusable ancestor" behavior) is needed because Safari only auto-focuses native form
+  // controls on click, not a plain div/canvas - explicit .focus() works the same in every browser.
+  const handleMouseDown = useCallback(() => {
+    mainContentRef.current?.focus();
+  }, []);
+
+  const handleKeyDown = useCallback(
+    (e) => {
+      if (e.code === "Space") {
+        e.preventDefault();
+        item.togglePlay();
+      } else if (e.code === "ArrowRight") {
+        e.preventDefault();
+        item.stepFrame(1);
+      } else if (e.code === "ArrowLeft") {
+        e.preventDefault();
+        item.stepFrame(-1);
+      }
+    },
+    [item],
+  );
+
   const isWipe = item.mode === "wipe";
   const stageWidth = stageSize ? stageSize[0] : 0;
   const stageHeight = stageSize ? stageSize[1] : 0;
@@ -176,7 +201,16 @@ const HtxVideoCompareView = ({ item }) => {
 
   return (
     <ObjectTag item={item}>
-      <div className={cn("video-compare").mod({ fullscreen: isFullScreen }).toClassName()} ref={mainContentRef}>
+      <div
+        className={cn("video-compare").mod({ fullscreen: isFullScreen }).toClassName()}
+        ref={mainContentRef}
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: role="application" widget with its own space/arrow transport shortcuts, not navigable content
+        tabIndex={0}
+        role="application"
+        aria-label="Video comparison player"
+        onMouseDown={handleMouseDown}
+        onKeyDown={handleKeyDown}
+      >
         {errors.map((error, i) => (
           <ErrorMessage key={`err-${i}`} error={error} />
         ))}
