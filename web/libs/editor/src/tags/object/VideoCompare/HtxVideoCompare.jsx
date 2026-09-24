@@ -9,7 +9,7 @@ import ResizeObserver from "../../../utils/resize-observer";
 import { clamp } from "../../../utils/utilities";
 import { CompareControls } from "./CompareControls";
 import { HstackVideoCanvas } from "./HstackVideoCanvas";
-import "./VideoCompare.prefix.css";
+import "./VideoCompare.scss";
 
 /**
  * The divider drags itself: during a drag it writes the new position straight onto the divider's

@@ -12,7 +12,7 @@ import {
 import { Button, Tooltip } from "@humansignal/ui";
 import { Slider } from "../../../components/Timeline/Controls/Slider";
 import { cn } from "../../../utils/bem";
-import "./CompareControls.prefix.css";
+import "./CompareControls.scss";
 
 const formatSeconds = (seconds) => {
   if (!Number.isFinite(seconds)) return "0:00";
